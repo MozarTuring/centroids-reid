@@ -41,6 +41,6 @@ class CenterLoss(nn.Module):
         labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
         mask = labels.eq(classes.expand(batch_size, self.num_classes))
 
-        dist = distmat * mask.float()
+        dist = distmat * mask.float() # 一个样本属于哪一类，就只需要和那一类中心点之间的距离。所以其实没必要计算和所有类中心之间的距离。
         loss = dist.clamp(min=1e-12, max=1e+12).sum() / batch_size
         return loss

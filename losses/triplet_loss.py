@@ -36,8 +36,8 @@ def euclidean_dist(x, y):
     xx = torch.pow(x, 2).sum(1, keepdim=True).expand(m, n)
     yy = torch.pow(y, 2).sum(1, keepdim=True).expand(n, m).t()
     dist = xx + yy
-    dist.addmm_(1, -2, x.float(), y.float().t())
-    dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
+    dist.addmm_(1, -2, x.float(), y.float().t()) # dist - 2x@y.t
+    dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability 限制最小值为 1e-12, sqrt 是由欧式距离的定义得到的
     return dist
 
 
@@ -87,16 +87,16 @@ def hard_example_mining(dist_mat, labels, return_inds=False):
     N = dist_mat.size(0)
 
     # shape [N, N]
-    is_pos = labels.expand(N, N).eq(labels.expand(N, N).t())
+    is_pos = labels.expand(N, N).eq(labels.expand(N, N).t()) # 根据设定，一个batch中各个类别均包含4个样本，所以每一个样本都有（包括自身）4个同类别的样本，所以总共是 batch_size*4
     is_neg = labels.expand(N, N).ne(labels.expand(N, N).t())
 
     # `dist_ap` means distance(anchor, positive)
     # both `dist_ap` and `relative_p_inds` with shape [N, 1]
     dist_ap, relative_p_inds = torch.max(
-        dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True)
+        dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True) # 对于每一个样本，取和同类样本中距离最大的
     # `dist_an` means distance(anchor, negative)
     # both `dist_an` and `relative_n_inds` with shape [N, 1]
-    dist_an, relative_n_inds = torch.min(dist_mat[is_neg].contiguous().view(N, -1), 1, keepdim=True)
+    dist_an, relative_n_inds = torch.min(dist_mat[is_neg].contiguous().view(N, -1), 1, keepdim=True) # 对于每一个样本，取和不同类别的样本中最小的
     # shape [N]
     dist_ap = dist_ap.squeeze(1)
     dist_an = dist_an.squeeze(1)
@@ -139,7 +139,7 @@ class TripletLoss(object):
     def __call__(self, global_feat, labels, warmup_margin=False, print_data=False, normalize_feature=False, mask=None):
         if normalize_feature:
             global_feat = normalize(global_feat, axis=-1)
-        dist_mat = self.dist_func(global_feat, global_feat)
+        dist_mat = self.dist_func(global_feat, global_feat) # 计算一个batch中各个样本（提取特征之后）之间的距离
         dist_ap, dist_an = hard_example_mining(
             dist_mat, labels)
 

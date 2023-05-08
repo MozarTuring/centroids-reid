@@ -41,13 +41,14 @@ def eval_func(
     num_valid_q = 0.0  # number of valid query
     topk_results = []  # Store topk retureval
     single_performance = []
+    print(num_q)
     for q_idx in tqdm(range(num_q)):
         # get query pid and camid
         q_pid = q_pids[q_idx]
         q_camid = q_camids[q_idx]
 
         # remove gallery samples that have the same pid and camid with query
-        order = indices[q_idx]
+        order = indices[q_idx] # indices.shape = (3368,15913)
         if respect_camids:
             remove = [
                 (gpid == q_pid) & (q_camid in gcamid)
@@ -86,7 +87,11 @@ def eval_func(
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     all_cmc = all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
-    all_topk = np.vstack(topk_results)
+    print(len(topk_results))
+    try:
+        all_topk = np.vstack(topk_results)
+    except:
+        import ipdb; ipdb.set_trace()
     all_topk = np.mean(all_topk, 0)
 
     return all_cmc, mAP, all_topk, np.array(single_performance)

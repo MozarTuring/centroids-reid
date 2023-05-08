@@ -15,7 +15,7 @@ _C = CN()
 # -----------------------------------------------------------------------------
 # MODEL
 # -----------------------------------------------------------------------------
-_C.MODEL = CN()
+_C.MODEL = CN() # 得是一个model会有很多设定，所以把它变成一个 CN 实例，就可以按下面方式给它各个属性赋值了（不知道这个和字典相比有啥优势）
 # Name of backbone
 _C.MODEL.NAME = "resnet50"
 # Size of embeddings from backbone
@@ -65,7 +65,9 @@ _C.DATASETS.NAMES = "market1501"
 _C.DATASETS.ROOT_DIR = "/home/data"
 # Path to json train file for datasets that require it
 _C.DATASETS.JSON_TRAIN_PATH = ""
-
+_C.DATASETS.train_dir = "bounding_box_train"
+_C.DATASETS.query_dir= "query"
+_C.DATASETS.gallery_dir= "bounding_box_test"
 # -----------------------------------------------------------------------------
 # DATALOADER
 # -----------------------------------------------------------------------------

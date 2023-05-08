@@ -23,7 +23,7 @@ from losses.center_loss import CenterLoss
 from losses.triplet_loss import CrossEntropyLabelSmooth, TripletLoss
 from modelling.baseline import Baseline
 from solver import build_optimizer, build_scheduler
-from utils.reid_metric import R1_mAP
+from utils.reid_metric import R1_mAP, myR1_mAP
 
 
 def weights_init_classifier(m):
@@ -295,6 +295,41 @@ class ModelBase(pl.LightningModule):
         self.trainer.logger_connector.callback_metrics.update(log_data)
         log_data = {**log_data, **topks}
         self.trainer.logger.log_metrics(log_data, step=self.trainer.current_epoch)
+
+
+    def my_get_val_metrics(self, embeddings, labels, camids):
+        self.r1_map_func = myR1_mAP(
+            pl_module=self,
+            num_query=self.hparams.num_query,
+            feat_norm=self.hparams.TEST.FEAT_NORM,
+        )
+        respect_camids = (
+            True
+            if (
+                self.hparams.MODEL.KEEP_CAMID_CENTROIDS
+                and self.hparams.MODEL.USE_CENTROIDS
+            )
+            else False
+        )
+        cmc, mAP, all_topk = self.r1_map_func.compute(
+            feats=embeddings.float(),
+            pids=labels,
+            camids=camids,
+            respect_camids=respect_camids,
+        )
+
+        topks = {}
+        for top_k, kk in zip(all_topk, [1, 5, 10, 20, 50]):
+            print("top-k, Rank-{:<3}:{:.1%}".format(kk, top_k))
+            topks[f"Top-{kk}"] = top_k
+        print(f"mAP: {mAP}")
+
+        log_data = {"mAP": mAP}
+
+        # TODO This line below is hacky, but it works when grad_monitoring is active
+        # self.trainer.logger_connector.callback_metrics.update(log_data)
+        # log_data = {**log_data, **topks}
+        # self.trainer.logger.log_metrics(log_data, step=self.trainer.current_epoch)
 
     def validation_epoch_end(self, outputs):
         if self.trainer.global_rank == 0 and self.trainer.local_rank == 0:

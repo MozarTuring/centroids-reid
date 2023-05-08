@@ -72,15 +72,16 @@ def get_backbone(name: str, **kwargs) -> torch.nn.Module:
 
 def run_single(cfg, method, logger_save_dir):
 
+    # 注意有 2 个log
     logger = TensorBoardLogger(cfg.LOG_DIR, name=logger_save_dir)
-    mlflow_logger = MLFlowLogger(experiment_name="default")
+    mlflow_logger = MLFlowLogger(experiment_name=cfg.OUTPUT_DIR)
 
     loggers = [logger, mlflow_logger]
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=os.path.join(logger.log_dir, "checkpoints"),
         filename="{epoch}",
-        monitor=cfg.SOLVER.MONITOR_METRIC_NAME,
+        monitor=cfg.SOLVER.MONITOR_METRIC_NAME, # mAP 计算应该是在这里
         mode=cfg.SOLVER.MONITOR_METRIC_MODE,
         verbose=True,
     )
@@ -100,7 +101,7 @@ def run_single(cfg, method, logger_save_dir):
 
     trainer = pl.Trainer(
         gpus=cfg.GPU_IDS,
-        max_epochs=cfg.SOLVER.MAX_EPOCHS,
+        max_epochs=cfg.SOLVER.MAX_EPOCHS, # epoch数量 在这里
         logger=loggers,
         fast_dev_run=False,
         check_val_every_n_epoch=cfg.SOLVER.EVAL_PERIOD,
@@ -123,9 +124,10 @@ def run_single(cfg, method, logger_save_dir):
         trainer,
         sampler_name=cfg.DATALOADER.SAMPLER,
         drop_last=cfg.DATALOADER.DROP_LAST,
-    )
+    ) # dataloader 在这里
     val_dataloader = dm.val_dataloader()
     if cfg.TEST.ONLY_TEST:
+        import ipdb;ipdb.set_trace()
         method = method.load_from_checkpoint(
             cfg.MODEL.PRETRAIN_PATH,
             cfg=cfg,
@@ -140,7 +142,7 @@ def run_single(cfg, method, logger_save_dir):
     else:
         if cfg.MODEL.RESUME_TRAINING:
             method = method.load_from_checkpoint(
-                cfg.MODEL.PRETRAIN_PATH,
+                cfg.MODEL.PRETRAIN_PATH, # 这个不是backbone的预训练模型
                 num_query=dm.num_query,
                 num_classes=dm.num_classes,
                 use_multiple_loggers=True if len(loggers) > 1 else False,
@@ -162,7 +164,7 @@ def run_single(cfg, method, logger_save_dir):
 
 
 def run_main(cfg, method, logger_save_dir):
-    cfg.DATALOADER.NUM_WORKERS = int(multiprocessing.cpu_count() // len(cfg.GPU_IDS))
+    cfg.DATALOADER.NUM_WORKERS = 1 # int(multiprocessing.cpu_count() // len(cfg.GPU_IDS)) # 有20个cpu
     cfg.LOG_DIR = (
         f"logs/{cfg.DATASETS.NAMES}" if cfg.OUTPUT_DIR == "" else cfg.OUTPUT_DIR
     )

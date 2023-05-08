@@ -34,8 +34,10 @@ class CTLModel(ModelBase):
             "centroid_triplet",
         ]
         self.losses_dict = {n: [] for n in self.losses_names}
+        self.mystep = 0
 
     def training_step(self, batch, batch_idx, optimizer_idx=None):
+        self.mystep += 1
         opt, opt_center = self.optimizers(use_pl_optimizer=True)
 
         if self.hparams.SOLVER.USE_WARMUP_LR:
@@ -75,13 +77,14 @@ class CTLModel(ModelBase):
         total_loss = center_loss + xent_query + contrastive_loss_query
 
         self.manual_backward(total_loss, optimizer=opt)
+
         opt.step()
 
         for param in self.center_loss.parameters():
             param.grad.data *= 1.0 / self.hparams.SOLVER.CENTER_LOSS_WEIGHT
         opt_center.step()
 
-        losses = [xent_query, contrastive_loss_query, center_loss]
+        losses = [xent_query, contrastive_loss_query, center_loss] # 训练损失在这里
         losses = [item.detach() for item in losses]
         losses = list(map(float, losses))
 
@@ -92,10 +95,13 @@ class CTLModel(ModelBase):
             "step_dist_ap": float(dist_ap.mean()),
             "step_dist_an": float(dist_an.mean()),
         }
+        if self.mystep % 206 == 0:
+            print("stop")
 
         return {"loss": total_loss, "other": log_data}
 
     def training_epoch_end(self, outputs):
+        # 会先执行 valuation
         if hasattr(self.trainer.train_dataloader.sampler, "set_epoch"):
             self.trainer.train_dataloader.sampler.set_epoch(self.current_epoch + 1)
 
@@ -124,23 +130,49 @@ class CTLModel(ModelBase):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="CLT Model Training")
-    parser.add_argument(
-        "--config_file", default="", help="path to config file", type=str
-    )
-    parser.add_argument(
-        "opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
+#    parser = argparse.ArgumentParser(description="CLT Model Training")
+#    parser.add_argument(
+#        "--config_file", default="", help="path to config file", type=str
+#    )
+#    parser.add_argument(
+#        "opts",
+#        help="Modify config options using the command-line",
+#        default=None,
+#        nargs=argparse.REMAINDER,
+#    )
 
-    args = parser.parse_args()
+#    args = parser.parse_args()
+    
 
-    if args.config_file != "":
-        cfg.merge_from_file(args.config_file)
-    cfg.merge_from_list(args.opts)
+#    if args.config_file != "":
+#        cfg.merge_from_file(args.config_file)
+#    print(args.opts)
+#    cfg.merge_from_list(args.opts)
+#    print(cfg)
+    cfg.merge_from_file("configs/256_resnet50.yml")
+    cfg.merge_from_list(["GPU_IDS",[0] ,"DATASETS.NAMES",'market1501' ,"DATASETS.ROOT_DIR",'/home/maojingwei/project/resources/dataset' ,"SOLVER.IMS_PER_BATCH",16 ,"TEST.IMS_PER_BATCH",128 ,"SOLVER.BASE_LR",0.00035 ,"OUTPUT_DIR",'expr20230504' ,"DATALOADER.USE_RESAMPLING",True ,"USE_MIXED_PRECISION",False ,"MODEL.USE_CENTROIDS",False ,"REPRODUCIBLE_NUM_RUNS",1,"TEST.ONLY_TEST",True])
+    print(cfg)
 
     logger_save_dir = f"{Path(__file__).stem}"
+    print(logger_save_dir)
 
     run_main(cfg, CTLModel, logger_save_dir)
+
+
+
+"""
+nohup python train_base_model.py \
+--config_file="configs/256_resnet50.yml" \
+GPU_IDS [0] \
+DATASETS.NAMES 'market1501' \
+DATASETS.ROOT_DIR '/home/maojingwei/project/resources/dataset' \
+SOLVER.IMS_PER_BATCH 16 \
+TEST.IMS_PER_BATCH 128 \
+SOLVER.BASE_LR 0.00035 \
+OUTPUT_DIR 'logs/market1501/256_resnet50_base' \
+DATALOADER.USE_RESAMPLING True \
+USE_MIXED_PRECISION False \
+MODEL.USE_CENTROIDS False \
+REPRODUCIBLE_NUM_RUNS 1 > my_log.txt 2>&1 &
+
+"""

@@ -1,7 +1,7 @@
 MODEL:
   NAME: 'resnet50'
   BACKBONE_EMB_SIZE: 2048
-  PRETRAIN_PATH: './models/resnet50-19c8e357.pth'
+  PRETRAIN_PATH: '/home/maojingwei/project/resources/pretrained_models/resnet50-19c8e357.pth'
   KEEP_CAMID_CENTROIDS: True
 
 INPUT:

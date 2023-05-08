@@ -122,6 +122,27 @@ class ReidBaseDataModule(pl.LightningDataModule):
             collate_fn=collate_fn_alternative,
             **kwargs,
         )
+    
+    def my_train_dataloader(
+        self, cfg, sampler_name: str = "random_identity", **kwargs
+    ):
+        sampler = get_sampler(
+            sampler_name,
+            data_source=self.train_dict,
+            batch_size=self.cfg.SOLVER.IMS_PER_BATCH,
+            num_instances=self.num_instances,
+            world_size=1,
+            rank=0,
+        )
+        return DataLoader(
+            self.train,
+            self.cfg.SOLVER.IMS_PER_BATCH,
+            num_workers=self.num_workers,
+            shuffle=False,
+            sampler=sampler,
+            collate_fn=collate_fn_alternative,
+            **kwargs,
+        )
 
     def val_dataloader(self):
         sampler = SequentialSampler(
@@ -352,6 +373,8 @@ class BaseDatasetLabelledPerPid(Dataset):
         Returns:
             num_instace of given pid
         """
+        # if a class defines this method,then this method can be called when
+        # [ind] is appended to its instance
         pid = int(pid)
         list_of_samples = self.samples[pid][
             :
@@ -372,6 +395,7 @@ class BaseDatasetLabelledPerPid(Dataset):
         random.shuffle(self.samples[pid])
 
         out = []
+        print(pid)
         for _ in range(choice_size):
             tup = self.samples[pid].pop(0)
             path, target, camid, idx = tup
