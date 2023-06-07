@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 from .samplers import get_sampler
 from .transforms import ReidTransforms
+import logging
 
 
 def pil_loader(path):
@@ -380,6 +381,8 @@ class BaseDatasetLabelledPerPid(Dataset):
             :
         ]  # path, target, camid, idx <- in each inner tuple
         _len = len(list_of_samples)
+        if _len <=1 :
+            import ipdb;ipdb.set_trace()
         assert (
             _len > 1
         ), f"len of samples for pid: {pid} is <=1. len: {len_}, samples: {list_of_samples}"
@@ -395,7 +398,7 @@ class BaseDatasetLabelledPerPid(Dataset):
         random.shuffle(self.samples[pid])
 
         out = []
-        print(pid)
+#        print(pid)
         for _ in range(choice_size):
             tup = self.samples[pid].pop(0)
             path, target, camid, idx = tup
@@ -456,6 +459,13 @@ class BaseDatasetLabelled(Dataset):
         """
         path, target, camid, idx = self.samples[index]
         sample = pil_loader(path)
+#        sample is of type PIL.Image.Image
+
+#        self.transform is Compose(
+#            Resize(size=[256, 128], interpolation=PIL.Image.BILINEAR)
+#            ToTensor()
+#            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+#        )
         if self.transform is not None:
             sample = self.transform(sample)
 
@@ -477,3 +487,5 @@ def collate_fn_alternative(batch):
 
     pids = torch.tensor(pids, dtype=torch.int64)
     return torch.stack(imgs, dim=0), pids, torch.tensor(camids), torch.tensor(isReal)
+
+

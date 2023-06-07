@@ -23,7 +23,7 @@ def top_k_retrieval(row_matches: np.ndarray, k: list):
 
 
 def eval_func(
-    indices, q_pids, g_pids, q_camids, g_camids, max_rank=50, respect_camids=False
+    indices, q_pids, g_pids, q_camids, g_camids, max_rank=50, respect_camids=False, distmat=None
 ):
     """
     Evaluation with market1501 metric
@@ -34,6 +34,9 @@ def eval_func(
         max_rank = num_g
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
+    tmp = distmat * matches
+    print("here {}".format(tmp.max()))
+    print("here {}".format(tmp.sum()/(tmp!=0).sum()))
 
     # compute cmc curve for each query
     all_cmc = []

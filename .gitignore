@@ -145,3 +145,6 @@ models/
 *.pyc
 debugs/
 *.c
+
+mlruns
+logs_debug

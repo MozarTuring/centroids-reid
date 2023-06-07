@@ -216,7 +216,7 @@ class myR1_mAP:
             indices = np.argsort(distmat, axis=1)
 
         cmc, mAP, all_topk, single_performance = eval_func(
-            indices, q_pids, g_pids, q_camids, g_camids, 50, respect_camids
+            indices, q_pids, g_pids, q_camids, g_camids, 50, respect_camids, np.sort(distmat,axis=1)
         )
 
         if self.hparms.TEST.VISUALIZE == "yes":

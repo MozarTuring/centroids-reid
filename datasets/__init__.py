@@ -12,6 +12,7 @@ from .dukemtmcreid import DukeMTMCreID
 from .market1501 import Market1501
 from .df1 import DF1
 from .street2shop import Street2Shop
+import logging
 
 __factory = {
     "market1501": Market1501,

@@ -1,0 +1,3 @@
+[submodule "pytorch_to_onnx"]
+	path = pytorch_to_onnx
+	url = git@github.com:MozarTuring/pytorch_to_onnx.git

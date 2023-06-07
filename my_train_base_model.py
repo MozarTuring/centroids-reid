@@ -1,15 +1,28 @@
+import requests
+import json
 import argparse
 from config import cfg
 from datasets import init_dataset
 from modelling.bases import ModelBase
 import torch
 import sys
+sys.path.append("/home/maojingwei/project/LUPerson/pytorch_to_onnx")
+from pytorch_to_onnx import net_to_onnx
 import mlflow
 import numpy as np
 import traceback
 import signal
-import debugpy
-# mlflow.set_tracking_uri("http://0.0.0.0:5000/")
+#from sribd_attendance.config import config as sconfig
+import json
+import numpy as np
+import onnxruntime as ort
+import torch
+import logging
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(pathname)s:%(lineno)s %(levelname)s - %(message)s",
+                    datefmt='%m-%d %H:%M')
+logging.info("start")
 # mlflow.create_experiment("me")
 device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -26,13 +39,13 @@ class CTLModel(ModelBase):
         self.mystep = 0
         opt_list, _ = self.configure_optimizers() # 会把 lr_schedule 直接赋值给 self
         self.opt, self.opt_center = opt_list
-        self.backbone.to(device)
+#        self.backbone.to(device)
         self.outputs = list()
         self.my_current_epoch = 0 # 不能命名成 current_epoch
 
     def training_step(self, batch):
         self.mystep += 1
-        print(self.my_current_epoch)
+#        print(self.my_current_epoch)
         # opt, opt_center = self.optimizers(use_pl_optimizer=True)
 
         if self.hparams.SOLVER.USE_WARMUP_LR:
@@ -124,6 +137,17 @@ class CTLModel(ModelBase):
         self.my_current_epoch += 1
 
 
+class backbone_bn(torch.nn.Module):
+    def __init__(self, backbone, bn):
+        self.backbone = backbone
+        self.bn = bn
+
+
+    def forward(self, x):
+        _, tmp = self.backbone(x)
+        ret = self.bn(tmp)
+        return ret
+
 def term_sig_handler(signum, frame):
     print('catched singal: %d' % signum) # 这个print的内容无法进入 my_log.txt
     mlflow.log_artifact("my_log.txt")
@@ -154,8 +178,12 @@ if __name__ == "__main__":
 #        breakpoint()
 #    cfg.merge_from_list(args.opts)
     cfg.merge_from_file("configs/256_resnet50.yml")
-    cfg.merge_from_list(["GPU_IDS",[0] ,"DATASETS.NAMES",'market1501' ,"DATASETS.ROOT_DIR",'/home/maojingwei/project/resources/dataset' ,"SOLVER.IMS_PER_BATCH",16 ,"TEST.IMS_PER_BATCH",128 ,"SOLVER.BASE_LR",0.00035 ,"OUTPUT_DIR",'' ,"DATALOADER.USE_RESAMPLING",True ,"USE_MIXED_PRECISION",False ,"MODEL.USE_CENTROIDS",False ,"REPRODUCIBLE_NUM_RUNS",1, "DATASETS.train_dir", "bounding_box_train", "DATASETS.query_dir", "letian/query", "DATASETS.gallery_dir", "letian/bounding_box_test"])
+    cfg.merge_from_list(["GPU_IDS",[0] ,"DATASETS.NAMES",'market1501' ,"DATASETS.ROOT_DIR",'/home/maojingwei/project/resources/dataset' ,"SOLVER.IMS_PER_BATCH",16 ,"TEST.IMS_PER_BATCH",128 ,"SOLVER.BASE_LR",0.00035 ,"OUTPUT_DIR",'' ,"DATALOADER.USE_RESAMPLING",True ,"USE_MIXED_PRECISION",False ,"MODEL.USE_CENTROIDS",False ,"REPRODUCIBLE_NUM_RUNS",1,"DATALOADER.NUM_WORKERS",0]) # , "DATASETS.query_dir", "letian/query", "DATASETS.gallery_dir", "letian/bounding_box_test"
     print(cfg)
+    print(cfg.SOLVER.MAX_EPOCHS)
+    if args.debug:
+        cfg.SOLVER.MAX_EPOCHS = 1
+    
 
     mlflow.start_run(run_name="debug", experiment_id="653795851656303629", nested=True)
 
@@ -169,6 +197,7 @@ if __name__ == "__main__":
             num_query=dm.num_query,
             num_classes=dm.num_classes
         )
+    
     ctl_model.to(device)
 
     # 这里 my_train_dataloader 不能直接跳转，要先去找到dm的定义才能找到怎么进入，这就比较麻烦，会成为一个阻力点。这种通过debug的方式进入就轻松高效很多
@@ -179,12 +208,14 @@ if __name__ == "__main__":
         )
 
     val_dataloader = dm.val_dataloader()
+#    body_feat_config = sconfig["body_feature"]
 
-    for cur_epoch in range(120):
+    for cur_epoch in range(cfg.SOLVER.MAX_EPOCHS):
+        logging.info(f"{cur_epoch=}")
         ctl_model.train()
         for count, train_batch in enumerate(train_loader):
-            # if count > 2 :
-            #     break
+            if args.debug and count > 2 :
+                break
             ctl_model.training_step(batch=train_batch)
         ctl_model.training_epoch_end()
         ctl_model.lr_scheduler.step()
@@ -196,7 +227,24 @@ if __name__ == "__main__":
                 ctl_model.backbone.eval()
                 ctl_model.bn.eval()
                 x, class_labels, camid, idx = eval_batch
+#                if 'backbone_sess' not in body_feat_config:
+#                    body_feat_config['backbone_sess'] = ort.InferenceSession(body_feat_config['onnx_backbone_path'], providers=body_feat_config['providers'])
+#                    body_feat_config['input_h_w'] = (256, 128)
+#                if 'bn_sess' not in body_feat_config:
+#                    body_feat_config['bn_sess'] = ort.InferenceSession(body_feat_config['onnx_bn_path'], providers=body_feat_config['providers'])
+#
+#                _, outputs_backbone = body_feat_config['backbone_sess'].run(None, {'nchw_rgb': x.numpy()})
+#                outputs_bn = body_feat_config['bn_sess'].run(None, {'nd': outputs_backbone})
+#                print(outputs_bn[0].shape)
+#                emb = torch.from_numpy(outputs_bn[0])
+
                 x = x.to(device)
+#                for tmp_i in range(x.shape[0]):
+#                    res = requests.post("http://127.0.0.1:52406/", json={"x":x.numpy().tolist()})
+#                    ret = json.loads(res.content)
+#                    print(ret.keys())
+#                    emb = torch.tensor(ret["emb"])
+#                    print(emb.shape)
 
                 with torch.no_grad():
                     _, emb = ctl_model.backbone(x)
@@ -210,6 +258,9 @@ if __name__ == "__main__":
             camids = torch.cat([x.pop("camid") for x in outputs]).cpu().detach().numpy()
             ctl_model.my_get_val_metrics(embeddings, labels, camids) # this
 #            does not use centroids to retrieval
+
+    merge_model = backbone_bn(ctl_model.backbone, ctl_model.bn)
+    net_to_onnx(merge_model, "tmp_merge.onnx", [(1,3,256,128),], ["nchw_rgb",], ["output", ], True)
 
 #    mlflow.log_artifact("my_log.txt")
 
