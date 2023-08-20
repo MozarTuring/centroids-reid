@@ -127,7 +127,6 @@ def run_single(cfg, method, logger_save_dir):
     ) # dataloader 在这里
     val_dataloader = dm.val_dataloader()
     if cfg.TEST.ONLY_TEST:
-        import ipdb;ipdb.set_trace()
         method = method.load_from_checkpoint(
             cfg.MODEL.PRETRAIN_PATH,
             cfg=cfg,

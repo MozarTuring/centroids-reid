@@ -6,8 +6,11 @@ from datasets import init_dataset
 from modelling.bases import ModelBase
 import torch
 import sys
-sys.path.append("/home/maojingwei/project/LUPerson/pytorch_to_onnx")
-from pytorch_to_onnx import net_to_onnx
+#sys.path.append("/home/maojingwei/project/LUPerson/pytorch_to_onnx")
+#from pytorch_to_onnx import net_to_onnx
+#sys.path.append("/home/maojingwei/project/sribd_attendance")
+#from sribd_face.modules.body_feature.body_feature import cls_body_feature
+#from sribd_face.modules.config import module_config
 import mlflow
 import numpy as np
 import traceback
@@ -139,6 +142,7 @@ class CTLModel(ModelBase):
 
 class backbone_bn(torch.nn.Module):
     def __init__(self, backbone, bn):
+        super(backbone_bn, self).__init__()
         self.backbone = backbone
         self.bn = bn
 
@@ -147,6 +151,7 @@ class backbone_bn(torch.nn.Module):
         _, tmp = self.backbone(x)
         ret = self.bn(tmp)
         return ret
+
 
 def term_sig_handler(signum, frame):
     print('catched singal: %d' % signum) # 这个print的内容无法进入 my_log.txt
@@ -178,11 +183,12 @@ if __name__ == "__main__":
 #        breakpoint()
 #    cfg.merge_from_list(args.opts)
     cfg.merge_from_file("configs/256_resnet50.yml")
-    cfg.merge_from_list(["GPU_IDS",[0] ,"DATASETS.NAMES",'market1501' ,"DATASETS.ROOT_DIR",'/home/maojingwei/project/resources/dataset' ,"SOLVER.IMS_PER_BATCH",16 ,"TEST.IMS_PER_BATCH",128 ,"SOLVER.BASE_LR",0.00035 ,"OUTPUT_DIR",'' ,"DATALOADER.USE_RESAMPLING",True ,"USE_MIXED_PRECISION",False ,"MODEL.USE_CENTROIDS",False ,"REPRODUCIBLE_NUM_RUNS",1,"DATALOADER.NUM_WORKERS",0]) # , "DATASETS.query_dir", "letian/query", "DATASETS.gallery_dir", "letian/bounding_box_test"
+    cfg.merge_from_list(["GPU_IDS",[0] ,"DATASETS.NAMES",'market1501' ,"DATASETS.ROOT_DIR",'/home/maojingwei/project/resources/dataset' ,"SOLVER.IMS_PER_BATCH",16 ,"TEST.IMS_PER_BATCH",128 ,"SOLVER.BASE_LR",0.00035 ,"OUTPUT_DIR",'' ,"DATALOADER.USE_RESAMPLING",True ,"USE_MIXED_PRECISION",False ,"MODEL.USE_CENTROIDS",False ,"REPRODUCIBLE_NUM_RUNS",1,]) # "DATALOADER.NUM_WORKERS",0 , "DATASETS.query_dir", "letian/query", "DATASETS.gallery_dir", "letian/bounding_box_test"
     print(cfg)
     print(cfg.SOLVER.MAX_EPOCHS)
     if args.debug:
         cfg.SOLVER.MAX_EPOCHS = 1
+        body_feature_obj = cls_body_feature(module_config["body_feature"])
     
 
     mlflow.start_run(run_name="debug", experiment_id="653795851656303629", nested=True)
@@ -223,22 +229,23 @@ if __name__ == "__main__":
         if cur_epoch in [0,40,80,119]:
             outputs = list()
             print("start eval")
+            ctl_model.backbone.eval()
+            ctl_model.bn.eval()
             for eval_batch in val_dataloader:
-                ctl_model.backbone.eval()
-                ctl_model.bn.eval()
                 x, class_labels, camid, idx = eval_batch
-#                if 'backbone_sess' not in body_feat_config:
-#                    body_feat_config['backbone_sess'] = ort.InferenceSession(body_feat_config['onnx_backbone_path'], providers=body_feat_config['providers'])
-#                    body_feat_config['input_h_w'] = (256, 128)
-#                if 'bn_sess' not in body_feat_config:
-#                    body_feat_config['bn_sess'] = ort.InferenceSession(body_feat_config['onnx_bn_path'], providers=body_feat_config['providers'])
-#
-#                _, outputs_backbone = body_feat_config['backbone_sess'].run(None, {'nchw_rgb': x.numpy()})
-#                outputs_bn = body_feat_config['bn_sess'].run(None, {'nd': outputs_backbone})
-#                print(outputs_bn[0].shape)
-#                emb = torch.from_numpy(outputs_bn[0])
+                if args.debug:
+                    emb_ls = list()
+                    for tmp_ind in range(x.shape[0]):
+                        outputs_bn = body_feature_obj.run(x[tmp_ind].numpy(), pre=False, post=False)
+                        emb = torch.from_numpy(outputs_bn)
+                        emb_ls.append(emb)
+                    emb = torch.cat(emb_ls, dim=0)
 
-                x = x.to(device)
+                else:
+                    x = x.to(device)
+                    with torch.no_grad():
+                        _, emb = ctl_model.backbone(x)
+                        emb = ctl_model.bn(emb)
 #                for tmp_i in range(x.shape[0]):
 #                    res = requests.post("http://127.0.0.1:52406/", json={"x":x.numpy().tolist()})
 #                    ret = json.loads(res.content)
@@ -246,9 +253,6 @@ if __name__ == "__main__":
 #                    emb = torch.tensor(ret["emb"])
 #                    print(emb.shape)
 
-                with torch.no_grad():
-                    _, emb = ctl_model.backbone(x)
-                    emb = ctl_model.bn(emb)
                 outputs.append({"emb": emb, "labels": class_labels, "camid": camid, "idx": idx})
             embeddings = torch.cat([x.pop("emb") for x in outputs]).detach().cpu()
             print(embeddings.shape)
@@ -259,8 +263,9 @@ if __name__ == "__main__":
             ctl_model.my_get_val_metrics(embeddings, labels, camids) # this
 #            does not use centroids to retrieval
 
-    merge_model = backbone_bn(ctl_model.backbone, ctl_model.bn)
-    net_to_onnx(merge_model, "tmp_merge.onnx", [(1,3,256,128),], ["nchw_rgb",], ["output", ], True)
+#    merge_model = backbone_bn(ctl_model.backbone, ctl_model.bn)
+#    merge_model.eval()
+#    net_to_onnx(merge_model, "tmp_merge.onnx", [(1,3,256,128),], ["nchw_rgb",], ["output", ], True)
 
 #    mlflow.log_artifact("my_log.txt")
 

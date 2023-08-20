@@ -439,6 +439,7 @@ class BaseDatasetLabelledPerPid(Dataset):
         sample = pil_loader(path)
         if self.transform is not None:
             sample = self.transform(sample)
+#            output sample shape is [3,256,128]
 
         return sample
 
