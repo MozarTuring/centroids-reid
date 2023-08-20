@@ -1,0 +1,8 @@
+datasets/market1501.py setup() 的 
+    self.val = BaseDatasetLabelled(query+gallery, transforms_base.build_transforms(is_train=False))
+can check the processing of image at eval
+
+
+self.cfg.INPUT.PIXEL_MEAN = [0.485, 0.456, 0.406]
+self.cfg.INPUT.PIXEL_STD = [0.229, 0.224, 0.225]
+self.cfg.INPUT.SIZE_TEST = [256, 128]
